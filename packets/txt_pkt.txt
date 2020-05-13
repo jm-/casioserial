@@ -1,0 +1,25 @@
+bytes                                       explanation
+------------------------------------------------------------------------
+3a 54 58 54                         		:TXT
+00
+50 47                                   	PG [program?]
+00
+00
+01 88                                   	(short=392 [+ 14 = program size])
+52 4f 55 4c 45 54 54 45     				ROULETTE (program name)
+ff ff ff ff ff ff ff ff
+ff ff ff ff ff ff ff ff     				(password)
+4e 4c                                   	LN
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ee                                        	(checksum)

@@ -1,0 +1,27 @@
+bytes                                       explanation
+------------------------------------------------------------------------
+3a 4d 45 4d                                 :MEM
+00
+42 55                                       BU [backup?]
+00
+00
+78 02                                       (short=30722)
+42 61 63 6b 75 70 ff ff                     BACKUP
+ff ff ff ff ff ff ff ff
+47 59 33 35 35 ff ff                        GY355
+00
+00
+08
+00
+00
+00
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+8a                                          (checksum)
