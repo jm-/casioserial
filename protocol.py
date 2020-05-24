@@ -7,17 +7,17 @@ import serial
 
 
 CASIO_TTY_DEVICE = os.environ.get('CASIO_TTY_DEVICE', '/dev/ttyAMA0')
-
-
+CASIO_TTY_BAUDRATE = os.environ.get('CASIO_TTY_BAUDRATE', '9600')
+CASIO_TTY_STOPBITS = os.environ.get('CASIO_TTY_STOPBITS', '1')
 
 def recv():
     print(f'opening serial device {CASIO_TTY_DEVICE}')
     ser = serial.Serial(
         CASIO_TTY_DEVICE,
-        baudrate=17860,
+        baudrate=int(CASIO_TTY_BAUDRATE),
         bytesize=8,
         parity='N',
-        stopbits=2
+        stopbits=int(CASIO_TTY_STOPBITS)
     )
 
     try:
@@ -43,26 +43,51 @@ def recv():
             print(f'DBG: prog_name={prog_name} prog_length={prog_length} prog_password={prog_password}')
 
         # 0x21 means already exists. the calc will ask the user to confirm overwrite
-        #ser.write(b'\x21')
+        ser.write(b'\x21')
         # 0x06 means ack, please send data
-        ser.write(b'\x06')
+        #ser.write(b'\x06')
+
+        b = ser.read(1)
+        if b == b'\x06':
+            # ack it
+            ser.write(b'\x06')
+        else:
+            print('unexpected, exiting')
+            return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         # 0x22 means error (COM/Receive). communication is terminated
 
-        # read the program data
-        b = ser.read(data_pkt_length)
-        if b:
-            print(f'0x{b.hex()}')
+        # # read the program data
+        # b = ser.read(data_pkt_length)
+        # if b:
+        #     print(f'0x{b.hex()}')
 
-        # send another 0x06 ack
-        ser.write(b'\x06')
+        # # send another 0x06 ack
+        # ser.write(b'\x06')
 
-        # read the end pkt
-        b = ser.read(50)
-        if b[:4] == b':END':
-            print(f'0x{b.hex()}')
-            print('recv complete, exiting')
-            return
+        # # read the end pkt
+        # b = ser.read(50)
+        # if b[:4] == b':END':
+        #     print(f'0x{b.hex()}')
+        #     print('recv complete, exiting')
+        #     return
 
         print('idling')
         while True:
@@ -80,10 +105,10 @@ def send():
     print(f'opening serial device {CASIO_TTY_DEVICE}')
     ser = serial.Serial(
         CASIO_TTY_DEVICE,
-        baudrate=17860,
+        baudrate=int(CASIO_TTY_BAUDRATE),
         bytesize=8,
         parity='N',
-        stopbits=2
+        stopbits=int(CASIO_TTY_STOPBITS)
     )
 
     try:
@@ -92,6 +117,7 @@ def send():
         ser.write(b'\x16')
 
         b = ser.read(1)
+        print(f'0x{b.hex()}')
         if b == b'\x13':
             # 0x13 means ack. we can proceed
             print(f'0x{b.hex()}')
@@ -106,6 +132,27 @@ def send():
             b'\xff\xff\xff\x4e\x4c\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'
             b'\xff\xed'
         )
+
+
+        # use this code to overwrite if it exists
+        #b = ser.read(1)
+        #if b == b'\x21':
+        #    # 0x21 means exists
+        #    print(f'0x{b.hex()}')
+        #else:
+        #    print('unexpected, exiting')
+        #    return
+
+        # print('@ writing 0x15')
+        # # 0x15 means NO, don't overwrite
+        # ser.write(b'\x15')
+
+        #print('@ writing 0x06')
+        # 0x06 means YES, do overwrite
+        #ser.write(b'\x06')
+
+
+
 
         b = ser.read(1)
         if b == b'\x06':
@@ -162,6 +209,13 @@ def send():
 
         print('@ done.')
         return
+
+
+        print('idling')
+        while True:
+            b = ser.read(1)
+            if b:
+                print(f'0x{b.hex()}')
 
     except KeyboardInterrupt:
         pass
