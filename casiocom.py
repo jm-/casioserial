@@ -1,9 +1,9 @@
 import os
 import sys
-import struct
 import argparse
+from zipfile import ZipFile
 
-import serial
+from casioserial.g1mfile import G1mFile
 
 
 # TODO move these to constants file
