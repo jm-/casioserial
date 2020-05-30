@@ -1,23 +1,44 @@
 import os
 import sys
 import argparse
-from zipfile import ZipFile
 
-from casioserial.g1mfile import G1mFile
-
-
-# TODO move these to constants file
-DEFAULT_CASIO_SERIAL_DEVICE = '/dev/ttyAMA0'
-DEFAULT_CASIO_SERIAL_BAUDRATE = 9600
-DEFAULT_CASIO_SERIAL_STOPBITS = 1
+import casioserial
 
 
 def casio_serial_transmit(args):
-    print('transmitting!')
+    print(args)
+
+    # check the file exists
+    if not os.path.isfile(args.file):
+        print(f'Source file {args.file} does not exist or is not a file')
+        return 1
+
+    with casioserial.CasioSerialDevice(mode='transmit',
+                                       device=args.device,
+                                       baudrate=args.baudrate,
+                                       stopbits=args.stopbits) as casio_device:
+        # establish connection
+        print(f'Establishing serial communication with {casio_device}')
+
+        try:
+            casio_device.initiate()
+        except casioserial.SerialCommunicationException as e:
+            print(
+                f'A communication exception occurred. '
+                f'Make sure the device is connected and in receive mode.'
+            )
+            return 1
+
+        print(f"Serial communication is established")
+
+        # TODO: open the g1m file
+
+    return 0
 
 
 def casio_serial_receive(args):
-    print('receiving!')
+    raise NotImplementedError()
+    #print('receiving!')
 
 
 def load_arguments():
@@ -27,20 +48,20 @@ def load_arguments():
         '--device',
         type=str,
         help='serial device (TTY)',
-        default=DEFAULT_CASIO_SERIAL_DEVICE
+        default=casioserial.DEFAULT_CASIO_SERIAL_DEVICE
     )
     parser.add_argument(
         '-b',
         '--baudrate',
         type=int,
         help='baud rate',
-        default=DEFAULT_CASIO_SERIAL_BAUDRATE
+        default=casioserial.DEFAULT_CASIO_SERIAL_BAUDRATE
     )
     parser.add_argument(
         '--stopbits',
         type=int,
         help='stop bits',
-        default=DEFAULT_CASIO_SERIAL_STOPBITS
+        default=casioserial.DEFAULT_CASIO_SERIAL_STOPBITS
     )
     parser.add_argument(
         '--verbose',
@@ -97,4 +118,4 @@ def load_arguments():
 if __name__ == '__main__':
     # process arguments
     args = load_arguments()
-    args.func(args)
+    sys.exit(args.func(args))
