@@ -3,6 +3,7 @@ import sys
 import argparse
 
 import casioserial
+import g1mfile
 
 
 def casio_serial_transmit(args):
@@ -12,6 +13,9 @@ def casio_serial_transmit(args):
     if not os.path.isfile(args.file):
         print(f'Source file {args.file} does not exist or is not a file')
         return 1
+    
+    # storage for what items were transmitted
+    transmitted_item_names = []
 
     with casioserial.CasioSerialDevice(mode='transmit',
                                        device=args.device,
@@ -21,7 +25,7 @@ def casio_serial_transmit(args):
         print(f'Establishing serial communication with {casio_device}')
 
         try:
-            casio_device.initiate()
+            casio_device.start_communication()
         except casioserial.SerialCommunicationException as e:
             print(
                 f'A communication exception occurred. '
@@ -31,7 +35,37 @@ def casio_serial_transmit(args):
 
         print(f"Serial communication is established")
 
-        # TODO: open the g1m file
+        # open the g1m file
+        with g1mfile.G1mFile(args.file, 'r',
+                             debug=(1 if args.verbose else 0)) as g:
+            for item in g.itemlist():
+                # check if this item should be transmitted
+                if args.itemnames and item.title not in args.itemnames:
+                    print(f'Skipping transmission of {item}: not specified')
+                    continue
+
+                # check that the type is transmittable
+                if not type(item) in (g1mfile.G1mProgram, g1mfile.G1mPicture):
+                    print(f'Skipping transmission of {item}: not supported')
+                    continue
+
+                if type(item) is g1mfile.G1mProgram:
+                    print(f'Transmitting program {item}')
+                    casio_device.transmit_program(name=item.g1m_title,
+                                                  program=item.g1m_program,
+                                                  password=item.g1m_password,
+                                                  overwrite=args.force)
+
+
+                elif type(item) is g1mfile.G1mPicture:
+                    print(f'Transmitting picture {item}')
+
+                transmitted_item_names.append(item.title)
+
+        print(f"Ending serial communication with {casio_device}")
+        casio_device.end_communication()
+
+        # TODO check that all specified items were transmitted
 
     return 0
 
@@ -83,9 +117,9 @@ def load_arguments():
         help='source g1m file to transmit'
     )
     transmit_parser.add_argument(
-        'entries',
+        'itemnames',
         type=str,
-        help='names of entries within the g1m file to transmit',
+        help='names of items within the g1m file to transmit',
         nargs='*'
     )
     transmit_parser.add_argument(

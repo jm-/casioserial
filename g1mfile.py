@@ -49,6 +49,10 @@ class G1mItem():
         self.length = length
 
 
+    def __repr__(self):
+        return f'{self.title} ({self.length}B)'
+
+
 class G1mProgram(G1mItem):
     """ Class to describe a program item """
 
@@ -94,13 +98,13 @@ class G1mFile():
 
     """
 
-    def __init__(self, file, mode='r'):
+    def __init__(self, file, mode='r', debug=0):
         if mode not in ('r', 'w'):
             raise ValueError("G1mFile requires mode 'r' or 'w'")
 
         # debug level
         self.items = []
-        self.debug = 0
+        self.debug = debug
         self.mode = mode
 
         if isinstance(file, os.PathLike):
@@ -173,10 +177,10 @@ class G1mFile():
         item_program = self.fp.read(item_length)
 
         program = G1mProgram(
-            item_title.partition(b'\x00')[0],
+            item_title.rstrip(b'\x00'),
             item_length,
-            item_program[10:],
-            item_program[:8].partition(b'\x00')[0]
+            item_program[10:].rstrip(b'\x00'),
+            item_program[:8].rstrip(b'\x00')
         )
         return program
 
@@ -186,7 +190,7 @@ class G1mFile():
         item_picture = self.fp.read(item_length)
 
         picture = G1mPicture(
-            item_title.partition(b'\x00')[0],
+            item_title.rstrip(b'\x00'),
             item_length,
             item_picture
         )

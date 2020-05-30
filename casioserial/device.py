@@ -35,6 +35,8 @@ class CasioSerialDevice():
             stopbits=stopbits
         )
 
+        print(self.ser)
+
 
     def __enter__(self):
         return self
@@ -48,21 +50,22 @@ class CasioSerialDevice():
         return f'Casio serial device ({self.device})'
 
 
-    def _send_packet(self, packet_data):
+    def _transmit_packet(self, packet_data):
         self.ser.write(packet_data)
 
 
-    def _recv_packet(self, length, timeout=None):
-        self.ser.timeout = timeout
+    def _receive_packet(self, length, timeout=None):
+        # timeout appears to affect transmit logic. Don't use
+        #self.ser.timeout = timeout
         return self.ser.read(length)
 
 
-    def initiate(self):
-        # send the request packet to check if the device is listening
-        self._send_packet(gen_request_packet())
+    def start_communication(self):
+        # transmit the start packet to check if the device is listening
+        self._transmit_packet(gen_start_packet())
 
         # the device should reply in a timely fashion
-        recv_packet_data = self._recv_packet(1, timeout=CONNECT_TIMEOUT)
+        recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
 
         # check that the device replied
         if not recv_packet_data:
@@ -70,11 +73,62 @@ class CasioSerialDevice():
                 f'Device did not return any data in the expected timeframe'
             )
 
-        if recv_packet_data != PROTOCOL_REQUEST_ACK_BYTE:
+        if recv_packet_data != PROTOCOL_START_ACK_BYTE:
+            self._transmit_packet(gen_error_packet())
+            raise SerialCommunicationException(
+                f'Unexpected response from device'
+            )
+
+
+    def end_communication(self):
+        # transmit the end packet to indicate we won't send any more data
+        self._transmit_packet(gen_end_packet())
+
+
+    def transmit_program(self, name, program, password=None, overwrite=False):
+        # transmit the program header packet
+        self._transmit_packet(
+            gen_program_header_packet(name, len(program), password)
+        )
+
+        # read the reply
+        recv_packet_data = self._receive_packet(1)
+        should_transmit_body = True
+
+        # check if the device indicated the program already exists
+        if recv_packet_data == PROTOCOL_ITEM_EXISTS:
+            if overwrite:
+                print(f'DBG: Overwriting existing item')
+                self._transmit_packet(gen_overwrite_yes_packet())
+
+            else:
+                print(f'DBG: Not overwriting existing item')
+                self._transmit_packet(gen_overwrite_no_packet())
+                should_transmit_body = False
+
+            # read the reply
+            recv_packet_data = self._receive_packet(1)
+
+        if should_transmit_body:
+            if recv_packet_data != PROTOCOL_OPERATION_ACK:
+                self._transmit_packet(gen_error_packet())
+                raise SerialCommunicationException(
+                    f'Unexpected response from device'
+                )
+
+            # transmit the program body packet
+            self._transmit_packet(gen_program_body_packet(program))
+
+            # read the reply
+            recv_packet_data = self._receive_packet(1)
+
+        if recv_packet_data != PROTOCOL_OPERATION_ACK:
+            self._transmit_packet(gen_error_packet())
             raise SerialCommunicationException(
                 f'Unexpected response from device'
             )
 
 
     def close(self):
-        self.ser.close()
+        if self.ser.is_open:
+            self.ser.close()
