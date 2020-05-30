@@ -18,7 +18,7 @@ class UnknownG1mItemTypeException(Exception):
 
 # table for G1M character set
 G1M_CHARS = b'\x89\x99\xab'
-ASCII_CHARS = b'\x2b\x7e\x21'
+ASCII_CHARS = b'+~!'
 G1M_TO_ASCII_TABLE = bytes.maketrans(G1M_CHARS, ASCII_CHARS)
 ASCII_TO_G1M_TABLE = bytes.maketrans(ASCII_CHARS, G1M_CHARS)
 
