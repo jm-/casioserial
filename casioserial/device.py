@@ -37,28 +37,22 @@ class CasioSerialDevice():
 
         print(self.ser)
 
-
     def __enter__(self):
         return self
-
 
     def __exit__(self, type, value, traceback):
         self.close()
 
-
     def __repr__(self):
         return f'Casio serial device ({self.device})'
-
 
     def _transmit_packet(self, packet_data):
         self.ser.write(packet_data)
 
-
     def _receive_packet(self, length, timeout=None):
-        # timeout appears to affect transmit logic. Don't use
+        # timeout appears to affect transmit logic. Don't use.
         #self.ser.timeout = timeout
         return self.ser.read(length)
-
 
     def start_communication(self):
         # transmit the start packet to check if the device is listening
@@ -79,11 +73,9 @@ class CasioSerialDevice():
                 f'Unexpected response from device'
             )
 
-
     def end_communication(self):
         # transmit the end packet to indicate we won't send any more data
         self._transmit_packet(gen_end_packet())
-
 
     def transmit_program(self, name, program, password=None, overwrite=False):
         # transmit the program header packet
@@ -127,7 +119,6 @@ class CasioSerialDevice():
             raise SerialCommunicationException(
                 f'Unexpected response from device'
             )
-
 
     def close(self):
         if self.ser.is_open:

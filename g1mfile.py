@@ -48,7 +48,6 @@ class G1mItem():
         self.title = str(translate_g1m_bytes_to_ascii(g1m_title), 'ascii')
         self.length = length
 
-
     def __repr__(self):
         return f'{self.title} ({self.length}B)'
 
@@ -69,7 +68,8 @@ class G1mProgram(G1mItem):
         self.g1m_program = g1m_program
         self.program_length = len(g1m_program)
         self.g1m_password = g1m_password
-        self.password = str(translate_g1m_bytes_to_ascii(g1m_password), 'ascii')
+        self.password = str(
+            translate_g1m_bytes_to_ascii(g1m_password), 'ascii')
 
 
 class G1mPicture(G1mItem):
@@ -84,7 +84,7 @@ class G1mPicture(G1mItem):
         super().__init__(g1m_title, length)
         self.g1m_picture = g1m_picture
         self.picture_length = len(g1m_picture)
-        #bitstring.Bits(bytes=item_data)
+        # bitstring.Bits(bytes=item_data)
 
 
 class G1mFile():
@@ -127,14 +127,11 @@ class G1mFile():
             self.fp.close()
             raise
 
-
     def __enter__(self):
         return self
 
-
     def __exit__(self, type, value, traceback):
         self.close()
-
 
     def _read_header(self):
         header_bytes = self.fp.read(32)
@@ -143,7 +140,7 @@ class G1mFile():
         header_i_bits = ~header_bits
         header_i_bytes = header_i_bits.tobytes()
 
-        (   file_identifier,
+        (file_identifier,
             file_type_identifier,
             magic_sequence_1,
             control_byte_1,
@@ -152,7 +149,7 @@ class G1mFile():
             control_byte_2,
             reserved_sequence_1,
             num_items
-        ) = struct.unpack('>8sB5sB1sIB9sH', header_i_bytes)
+         ) = struct.unpack('>8sB5sB1sIB9sH', header_i_bytes)
 
         if self.debug > 0:
             print(f'file_identifier={file_identifier}')
@@ -171,7 +168,6 @@ class G1mFile():
 
         return num_items
 
-
     def _read_program(self, item_title, item_length, item_data):
         program = G1mProgram(
             item_title.rstrip(b'\x00'),
@@ -181,7 +177,6 @@ class G1mFile():
         )
         return program
 
-
     def _read_picture(self, item_title, item_length, item_data):
         picture = G1mPicture(
             item_title.rstrip(b'\x00'),
@@ -190,16 +185,15 @@ class G1mFile():
         )
         return picture
 
-
     def _read_item(self):
         item_header_2 = self.fp.read(24)
 
-        (   mem_location_name,
+        (mem_location_name,
             item_title,
             item_type_identifier,
             item_length,
             reserved_sequence
-        ) = struct.unpack('>8s8sBI3s', item_header_2)
+         ) = struct.unpack('>8s8sBI3s', item_header_2)
 
         if self.debug > 0:
             print(f'mem_location_name={mem_location_name}')
@@ -221,13 +215,12 @@ class G1mFile():
             return None
             #raise UnknownG1mItemTypeException(f"{item_type_identifier}")
 
-
     def _read_items(self):
         item_header_1 = self.fp.read(20)
 
-        (   item_identifier,
+        (item_identifier,
             sub_item_count
-        ) = struct.unpack('>16sI', item_header_1)
+         ) = struct.unpack('>16sI', item_header_1)
 
         if self.debug > 0:
             print(f'item_identifier={item_identifier}')
@@ -236,17 +229,14 @@ class G1mFile():
         for sub_item_number in range(sub_item_count):
             yield self._read_item()
 
-
     def _read_contents(self):
         # read header, then items from self.fp
         num_items = self._read_header()
         while len(self.items) < num_items:
             self.items.extend(self._read_items())
 
-
     def itemlist(self):
         return self.items
-
 
     def close(self):
         if self.fp is None:

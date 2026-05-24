@@ -1,6 +1,6 @@
 from .device import (
-	SerialCommunicationException,
-	CasioSerialDevice
+    SerialCommunicationException,
+    CasioSerialDevice
 )
 
 from .common import (

@@ -13,7 +13,7 @@ def casio_serial_transmit(args):
     if not os.path.isfile(args.file):
         print(f'Source file {args.file} does not exist or is not a file')
         return 1
-    
+
     # storage for what items were transmitted
     transmitted_item_names = []
 
@@ -56,7 +56,6 @@ def casio_serial_transmit(args):
                                                   password=item.g1m_password,
                                                   overwrite=args.force)
 
-
                 elif type(item) is g1mfile.G1mPicture:
                     print(f'Transmitting picture {item}')
 
@@ -72,7 +71,7 @@ def casio_serial_transmit(args):
 
 def casio_serial_receive(args):
     raise NotImplementedError()
-    #print('receiving!')
+    # print('receiving!')
 
 
 def load_arguments():
