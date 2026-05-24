@@ -172,46 +172,26 @@ class G1mFile():
         return num_items
 
 
-    def _read_program(self, item_title, item_length):
-        # read the item data as program data
-        item_program = self.fp.read(item_length)
-
+    def _read_program(self, item_title, item_length, item_data):
         program = G1mProgram(
             item_title.rstrip(b'\x00'),
             item_length,
-            item_program[10:].rstrip(b'\x00'),
-            item_program[:8].rstrip(b'\x00')
+            item_data[10:].rstrip(b'\x00'),
+            item_data[:8].rstrip(b'\x00')
         )
         return program
 
 
-    def _read_picture(self, item_title, item_length):
-        # read the item data as picture data
-        item_picture = self.fp.read(item_length)
-
+    def _read_picture(self, item_title, item_length, item_data):
         picture = G1mPicture(
             item_title.rstrip(b'\x00'),
             item_length,
-            item_picture
+            item_data
         )
         return picture
 
 
     def _read_item(self):
-        item_header_1 = self.fp.read(20)
-
-        (   item_identifier,
-            sub_item_count
-        ) = struct.unpack('>16sI', item_header_1)
-
-        if self.debug > 0:
-            print(f'item_identifier={item_identifier}')
-            print(f'sub_item_count={sub_item_count}')
-
-        # make sure the subitem count is 1,
-        # so that item_header_2 can be safely decoded
-        assert sub_item_count == 0x01
-
         item_header_2 = self.fp.read(24)
 
         (   mem_location_name,
@@ -228,23 +208,40 @@ class G1mFile():
             print(f'item_length={item_length}')
             print(f'reserved_sequence={reserved_sequence}')
 
-        # make sure the item is a program
+        item_data = self.fp.read(item_length)
+
         if item_type_identifier == G1M_ITEM_TYPE_PROGRAM:
-            return self._read_program(item_title, item_length)
+            return self._read_program(item_title, item_length, item_data)
 
         elif item_type_identifier == G1M_ITEM_TYPE_PICTURE:
-            return self._read_picture(item_title, item_length)
+            return self._read_picture(item_title, item_length, item_data)
 
         else:
-            raise UnknownG1mItemTypeException(f"{item_type_identifier}")
+            print(f'Unknown G1M Item Type: {item_type_identifier}')
+            return None
+            #raise UnknownG1mItemTypeException(f"{item_type_identifier}")
+
+
+    def _read_items(self):
+        item_header_1 = self.fp.read(20)
+
+        (   item_identifier,
+            sub_item_count
+        ) = struct.unpack('>16sI', item_header_1)
+
+        if self.debug > 0:
+            print(f'item_identifier={item_identifier}')
+            print(f'sub_item_count={sub_item_count}')
+
+        for sub_item_number in range(sub_item_count):
+            yield self._read_item()
 
 
     def _read_contents(self):
         # read header, then items from self.fp
         num_items = self._read_header()
-        for item_num in range(num_items):
-            item = self._read_item()
-            self.items.append(item)
+        while len(self.items) < num_items:
+            self.items.extend(self._read_items())
 
 
     def itemlist(self):
