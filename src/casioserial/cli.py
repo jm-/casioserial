@@ -2,8 +2,14 @@ import os
 import sys
 import argparse
 
-import casioserial
-import g1mfile
+from . import (
+    CasioSerialDevice,
+    SerialCommunicationException,
+    DEFAULT_CASIO_SERIAL_DEVICE,
+    DEFAULT_CASIO_SERIAL_BAUDRATE,
+    DEFAULT_CASIO_SERIAL_STOPBITS,
+)
+from . import g1mfile
 
 
 def casio_serial_transmit(args):
@@ -17,16 +23,16 @@ def casio_serial_transmit(args):
     # storage for what items were transmitted
     transmitted_item_names = []
 
-    with casioserial.CasioSerialDevice(mode='transmit',
-                                       device=args.device,
-                                       baudrate=args.baudrate,
-                                       stopbits=args.stopbits) as casio_device:
+    with CasioSerialDevice(mode='transmit',
+                           device=args.device,
+                           baudrate=args.baudrate,
+                           stopbits=args.stopbits) as casio_device:
         # establish connection
         print(f'Establishing serial communication with {casio_device}')
 
         try:
             casio_device.start_communication()
-        except casioserial.SerialCommunicationException as e:
+        except SerialCommunicationException as e:
             print(
                 f'A communication exception occurred. '
                 f'Make sure the device is connected and in receive mode.'
@@ -81,20 +87,20 @@ def load_arguments():
         '--device',
         type=str,
         help='serial device (TTY)',
-        default=casioserial.DEFAULT_CASIO_SERIAL_DEVICE
+        default=DEFAULT_CASIO_SERIAL_DEVICE
     )
     parser.add_argument(
         '-b',
         '--baudrate',
         type=int,
         help='baud rate',
-        default=casioserial.DEFAULT_CASIO_SERIAL_BAUDRATE
+        default=DEFAULT_CASIO_SERIAL_BAUDRATE
     )
     parser.add_argument(
         '--stopbits',
         type=int,
         help='stop bits',
-        default=casioserial.DEFAULT_CASIO_SERIAL_STOPBITS
+        default=DEFAULT_CASIO_SERIAL_STOPBITS
     )
     parser.add_argument(
         '--verbose',
@@ -148,7 +154,10 @@ def load_arguments():
     return config
 
 
-if __name__ == '__main__':
-    # process arguments
+def main():
     args = load_arguments()
     sys.exit(args.func(args))
+
+
+if __name__ == '__main__':
+    main()

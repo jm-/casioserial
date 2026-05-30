@@ -1,2 +1,0 @@
-bitstring==3.1.7
-pyserial==3.4
