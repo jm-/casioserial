@@ -36,3 +36,15 @@ where = ["src"]
 
 [tool.setuptools.dynamic]
 version = { attr = "casioserial.__version__" }
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7",
+]
