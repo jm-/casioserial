@@ -3,6 +3,8 @@ import struct
 
 import bitstring
 
+from .charset import casio_to_str
+
 
 __all__ = ["BadG1mFile", "UnknownG1mItemTypeException",
            "G1mItem", "G1mProgram", "G1mPicture", "G1mFile"]
@@ -16,22 +18,8 @@ class UnknownG1mItemTypeException(Exception):
     pass
 
 
-# table for G1M character set
-G1M_CHARS = b'\x89\x99\xab'
-ASCII_CHARS = b'+~!'
-G1M_TO_ASCII_TABLE = bytes.maketrans(G1M_CHARS, ASCII_CHARS)
-ASCII_TO_G1M_TABLE = bytes.maketrans(ASCII_CHARS, G1M_CHARS)
-
 G1M_ITEM_TYPE_PROGRAM = 0x01
 G1M_ITEM_TYPE_PICTURE = 0x07
-
-
-def translate_g1m_bytes_to_ascii(b: bytes):
-    return b.translate(G1M_TO_ASCII_TABLE)
-
-
-def translate_ascii_bytes_to_g1m(b: bytes):
-    return b.translate(ASCII_TO_G1M_TABLE)
 
 
 class G1mItem():
@@ -45,7 +33,7 @@ class G1mItem():
 
     def __init__(self, g1m_title: bytes, length: int):
         self.g1m_title = g1m_title
-        self.title = str(translate_g1m_bytes_to_ascii(g1m_title), 'ascii')
+        self.title = casio_to_str(g1m_title)
         self.length = length
 
     def __repr__(self):
@@ -68,8 +56,7 @@ class G1mProgram(G1mItem):
         self.g1m_program = g1m_program
         self.program_length = len(g1m_program)
         self.g1m_password = g1m_password
-        self.password = str(
-            translate_g1m_bytes_to_ascii(g1m_password), 'ascii')
+        self.password = casio_to_str(g1m_password)
 
 
 class G1mPicture(G1mItem):

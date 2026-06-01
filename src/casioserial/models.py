@@ -1,3 +1,5 @@
+from .charset import casio_to_str
+
 __all__ = ['Program', 'Picture']
 
 
@@ -10,7 +12,7 @@ class Program:
         self.password = password
 
     def __repr__(self):
-        return f'Program({self.name!r}, {len(self.data)}B)'
+        return f'Program({casio_to_str(self.name)}, {len(self.data)}B)'
 
 
 class Picture:
@@ -23,4 +25,4 @@ class Picture:
         self.width = width
 
     def __repr__(self):
-        return f'Picture({self.name!r}, {self.height}x{self.width})'
+        return f'Picture({casio_to_str(self.name)}, {self.height}\u00d7{self.width})'

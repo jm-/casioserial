@@ -4,13 +4,12 @@ import struct
 import bitstring
 import pytest
 
+from casioserial.charset import casio_to_str, str_to_casio
 from casioserial.g1mfile import (
     G1mFile,
     G1mItem,
     G1mPicture,
     G1mProgram,
-    translate_ascii_bytes_to_g1m,
-    translate_g1m_bytes_to_ascii,
 )
 
 
@@ -64,32 +63,39 @@ def _make_g1m_bytes(items):
 
 
 class TestTranslation:
-    def test_g1m_to_ascii_plus(self):
-        assert translate_g1m_bytes_to_ascii(b"\x89") == b"+"
+    def test_casio_to_str_plus(self):
+        assert casio_to_str(b"\x89") == "+"
 
-    def test_g1m_to_ascii_tilde(self):
-        assert translate_g1m_bytes_to_ascii(b"\x99") == b"~"
+    def test_casio_to_str_minus(self):
+        assert casio_to_str(b"\x99") == "-"
 
-    def test_g1m_to_ascii_exclaim(self):
-        assert translate_g1m_bytes_to_ascii(b"\xab") == b"!"
+    def test_casio_to_str_multiply(self):
+        assert casio_to_str(b"\xa9") == "\xd7"
 
-    def test_ascii_to_g1m_plus(self):
-        assert translate_ascii_bytes_to_g1m(b"+") == b"\x89"
+    def test_casio_to_str_divide(self):
+        assert casio_to_str(b"\xb9") == "\xf7"
 
-    def test_ascii_to_g1m_tilde(self):
-        assert translate_ascii_bytes_to_g1m(b"~") == b"\x99"
+    def test_casio_to_str_caret(self):
+        assert casio_to_str(b"\xa8") == "^"
 
-    def test_ascii_to_g1m_exclaim(self):
-        assert translate_ascii_bytes_to_g1m(b"!") == b"\xab"
+    def test_casio_to_str_exclaim(self):
+        assert casio_to_str(b"\xab") == "!"
+
+    def test_str_to_casio_plus(self):
+        assert str_to_casio("+") == b"\x89"
+
+    def test_str_to_casio_minus(self):
+        assert str_to_casio("-") == b"\x99"
+
+    def test_str_to_casio_exclaim(self):
+        assert str_to_casio("!") == b"\xab"
 
     def test_roundtrip(self):
-        original = b"\x89\x99\xab"
-        assert translate_ascii_bytes_to_g1m(
-            translate_g1m_bytes_to_ascii(original)) == original
+        original = b"\x89\x99\xa9\xb9\xa8\xab"
+        assert str_to_casio(casio_to_str(original)) == original
 
     def test_passthrough(self):
-        data = b"HELLO\x00\xff"
-        assert translate_g1m_bytes_to_ascii(data) == data
+        assert casio_to_str(b"HELLO\x00") == "HELLO\x00"
 
 
 class TestG1mItem:
