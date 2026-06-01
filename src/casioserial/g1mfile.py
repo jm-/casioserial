@@ -4,8 +4,8 @@ import struct
 import bitstring
 
 
-__all__ = ["BadG1mFile", "UnknownG1mItemTypeException", "G1mProgram",
-           "G1mPict", "G1mFile"]
+__all__ = ["BadG1mFile", "UnknownG1mItemTypeException",
+           "G1mItem", "G1mProgram", "G1mPicture", "G1mFile"]
 
 
 class BadG1mFile(Exception):
@@ -110,13 +110,15 @@ class G1mFile():
         if isinstance(file, os.PathLike):
             file = os.fspath(file)
         if isinstance(file, str):
-            # file is a filename, get the stream
+            # file is a filename; G1mFile owns the stream lifetime
+            self._owns_fp = True
             self.filename = file
             mode_dict = {'r': 'rb', 'w': 'wb'}
             filemode = mode_dict[mode]
             self.fp = open(file, filemode)
         else:
-            # file is a stream
+            # file is a stream; caller owns the stream lifetime
+            self._owns_fp = False
             self.fp = file
             self.filename = getattr(file, 'name', None)
 
@@ -124,7 +126,8 @@ class G1mFile():
             if mode == 'r':
                 self._read_contents()
         except:
-            self.fp.close()
+            if self._owns_fp:
+                self.fp.close()
             raise
 
     def __enter__(self):
@@ -168,6 +171,40 @@ class G1mFile():
 
         return num_items
 
+
+    def _write_header(self, num_items):
+        # writes the g1m header to the first 32 bytes.
+        # assumes the current stream position is at the end of the file
+        total_file_size = self.fp.tell()
+        # rewind
+        self.fp.seek(0, 0)
+
+        # calculate the control bytes
+        lsb = total_file_size % 256
+        control_byte_1 = (lsb + 0x41) % 256
+        control_byte_2 = (lsb + 0xb8) % 256
+
+        # pack header
+        header_i_bytes = struct.pack(
+            '>8sB5sB1sIB9sH',
+            b'USBPower',
+            0x31,
+            b'\x00\x10\x00\x10\x00',
+            control_byte_1,
+            b'\x01',
+            total_file_size,
+            control_byte_2,
+            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+            num_items
+        )
+        # invert the header bits
+        header_i_bits = bitstring.Bits(bytes=header_i_bytes)
+        header_bits = ~header_i_bits
+        header_bytes = header_bits.tobytes()
+
+        self.fp.write(header_bytes)
+
+
     def _read_program(self, item_title, item_length, item_data):
         program = G1mProgram(
             item_title.rstrip(b'\x00'),
@@ -177,6 +214,56 @@ class G1mFile():
         )
         return program
 
+
+    def _write_program(self, item):
+        # write header 1
+        # item_identifier
+        self.fp.write(b'PROGRAM\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+        # sub_item_count
+        self.fp.write(b'\x00\x00\x00\x01')
+
+        # write header 2
+        # mem_location_name
+        self.fp.write(b'system\x00\x00')
+        # item_title
+        self.fp.write(item.g1m_title.ljust(8, b'\x00'))
+        # item_type_identifier
+        self.fp.write(b'\x01')
+        # item_length
+        # this needs to be written at the end
+        # store the stream position now and write an empty placeholder
+        item_length_stream_position = self.fp.tell()
+        self.fp.write(b'\x00\x00\x00\x00')
+        # reserved_sequence
+        self.fp.write(b'\x00\x00\x00')
+
+        # store the stream position now so we can calculate the item_length
+        pre_program_stream_position = self.fp.tell()
+        # password
+        self.fp.write(item.g1m_password.ljust(8, b'\x00'))
+        # alignment
+        self.fp.write(b'\x00\x00')
+        # write program data
+        self.fp.write(item.g1m_program)
+
+        # calculate item_length
+        post_program_stream_position = self.fp.tell()
+        item_length = post_program_stream_position - pre_program_stream_position
+        # pad to nearest 4 bytes
+        pad_length = 4 - (item_length % 4)
+        if pad_length > 0:
+            self.fp.write(b'\x00' * pad_length)
+            item_length += pad_length
+            post_program_stream_position += pad_length
+
+        # rewind to write item_length
+        self.fp.seek(item_length_stream_position, 0)
+        self.fp.write(struct.pack('>I', item_length))
+
+        # seek back
+        self.fp.seek(post_program_stream_position, 0)
+
+
     def _read_picture(self, item_title, item_length, item_data):
         picture = G1mPicture(
             item_title.rstrip(b'\x00'),
@@ -184,6 +271,30 @@ class G1mFile():
             item_data
         )
         return picture
+
+
+    def _write_pict(self, item):
+        # write header 1
+        # item_identifier
+        self.fp.write(b'PROGRAM\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+        # sub_item_count
+        self.fp.write(b'\x00\x00\x00\x01')
+
+        # write header 2
+        # mem_location_name
+        self.fp.write(b'system\x00\x00')
+        # item_title
+        self.fp.write(item.g1m_title.ljust(8, b'\x00'))
+        # item_type_identifier
+        self.fp.write(b'\x07')
+        # item_length
+        self.fp.write(struct.pack('>I', item.picture_length))
+        # reserved_sequence
+        self.fp.write(b'\x00\x00\x00')
+
+        # write pixel data
+        self.fp.write(item.g1m_picture)
+
 
     def _read_item(self):
         item_header_2 = self.fp.read(24)
@@ -235,6 +346,26 @@ class G1mFile():
         while len(self.items) < num_items:
             self.items.extend(self._read_items())
 
+
+    def _write_items(self, items):
+        # skip the header til last; we need to write the filesize
+        self.fp.write(b'\x00' * 32)
+        # write items
+        items_written = 0
+        for item in items:
+            if type(item) is G1mProgram:
+                self._write_program(item)
+                items_written += 1
+            elif type(item) is G1mPicture:
+                self._write_pict(item)
+                items_written += 1
+            else:
+                # undefined, skip
+                pass
+        # g1m header can be written
+        self._write_header(items_written)
+
+
     def itemlist(self):
         return self.items
 
@@ -244,6 +375,10 @@ class G1mFile():
 
         try:
             if self.mode == 'w':
-                self._write_header()
+                self._write_items(self.items)
         finally:
-            self.fp.close()
+            # make close() idempotent
+            fp = self.fp
+            self.fp = None
+            if self._owns_fp:
+                fp.close()

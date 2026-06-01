@@ -5,6 +5,7 @@ from .common import (
     DEFAULT_CASIO_SERIAL_BAUDRATE,
     DEFAULT_CASIO_SERIAL_STOPBITS
 )
+from .models import Program, Picture
 from .protocol import *
 
 
@@ -30,12 +31,10 @@ class CasioSerialDevice():
         self.ser = serial.Serial(
             device,
             baudrate=baudrate,
-            bytesize=8,
-            parity='N',
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
             stopbits=stopbits
         )
-
-        print(self.ser)
 
     def __enter__(self):
         return self
@@ -50,28 +49,44 @@ class CasioSerialDevice():
         self.ser.write(packet_data)
 
     def _receive_packet(self, length, timeout=None):
-        # timeout appears to affect transmit logic. Don't use.
-        #self.ser.timeout = timeout
+        # don't use a timeout - appears to affect transmit logic
         return self.ser.read(length)
 
     def start_communication(self):
-        # transmit the start packet to check if the device is listening
-        self._transmit_packet(gen_start_packet())
+        if self.mode == 'transmit':
+            # transmit the start packet to check if the device is listening
+            self._transmit_packet(gen_start_packet())
 
-        # the device should reply in a timely fashion
-        recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
+            # the device should reply in a timely fashion
+            recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
 
-        # check that the device replied
-        if not recv_packet_data:
-            raise SerialCommunicationException(
-                f'Device did not return any data in the expected timeframe'
-            )
+            # check that the device replied
+            if not recv_packet_data:
+                raise SerialCommunicationException(
+                    f'Device did not return any data in the expected timeframe'
+                )
 
-        if recv_packet_data != PROTOCOL_START_ACK_BYTE:
-            self._transmit_packet(gen_error_packet())
-            raise SerialCommunicationException(
-                f'Unexpected response from device'
-            )
+            if recv_packet_data != PROTOCOL_START_ACK_BYTE:
+                self._transmit_packet(gen_error_packet())
+                raise SerialCommunicationException(
+                    f'Unexpected response from device'
+                )
+
+        elif self.mode == 'receive':
+            # wait for the device to initiate
+            recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
+
+            if not recv_packet_data:
+                raise SerialCommunicationException(
+                    f'Device did not send start byte'
+                )
+
+            if recv_packet_data != PROTOCOL_START_BYTE:
+                raise SerialCommunicationException(
+                    f'Unexpected byte from device'
+                )
+
+            self._transmit_packet(PROTOCOL_START_ACK_BYTE)
 
     def end_communication(self):
         # transmit the end packet to indicate we won't send any more data
@@ -119,6 +134,44 @@ class CasioSerialDevice():
             raise SerialCommunicationException(
                 f'Unexpected response from device'
             )
+
+    def receive_item(self):
+        """Read one item from the device. Returns Program, Picture, or None (END)."""
+        header = self._receive_packet(PROTOCOL_HEADER_LENGTH)
+        if len(header) != PROTOCOL_HEADER_LENGTH:
+            raise SerialCommunicationException(
+                f'Did not receive a full header packet'
+            )
+
+        if is_end_header(header):
+            return None
+
+        if is_txt_header(header):
+            prog_name, payload_length, prog_password = parse_txt_header(header)
+            self._transmit_packet(PROTOCOL_OPERATION_ACK)
+            program_packet = self._receive_packet(payload_length)
+            program_data = parse_program_body(program_packet, payload_length)
+            self._transmit_packet(PROTOCOL_OPERATION_ACK)
+            return Program(name=prog_name, data=program_data, password=prog_password)
+
+        if is_img_header(header):
+            img_name, height, width = parse_img_header(header)
+            self._transmit_packet(PROTOCOL_OPERATION_ACK)
+            # chunk count is likely carried in header bytes 31:33 (observed 0x0004);
+            # hardcoded until confirmed by further testing
+            NUM_IMG_CHUNKS = 4
+            payload_length = 1 + 4 + (height * width) // 8 + 1
+            picture_data = b''
+            for _ in range(NUM_IMG_CHUNKS):
+                chunk_packet = self._receive_packet(payload_length)
+                picture_chunk = parse_picture_chunk(chunk_packet, payload_length)
+                picture_data += picture_chunk
+                self._transmit_packet(PROTOCOL_OPERATION_ACK)
+            return Picture(name=img_name, data=picture_data, height=height, width=width)
+
+        raise SerialCommunicationException(
+            f'Unknown header type: {header[:4]!r}'
+        )
 
     def close(self):
         if self.ser.is_open:

@@ -170,3 +170,54 @@ class TestG1mFile:
         data[14] ^= 0x01
         with pytest.raises(AssertionError):
             G1mFile(io.BytesIO(bytes(data)))
+
+
+class TestG1mFileWrite:
+    def _write_and_read_back(self, items):
+        buf = io.BytesIO()
+        with G1mFile(buf, mode='w') as g:
+            g.items = items
+        buf.seek(0)
+        return G1mFile(buf, mode='r')
+
+    def test_program_roundtrip_title(self):
+        prog = G1mProgram(b"MYPROG", 10 + 5, b"HELLO", b"")
+        g = self._write_and_read_back([prog])
+        assert g.items[0].g1m_title == b"MYPROG"
+
+    def test_program_roundtrip_data(self):
+        prog = G1mProgram(b"MYPROG", 10 + 5, b"HELLO", b"")
+        g = self._write_and_read_back([prog])
+        assert g.items[0].g1m_program == b"HELLO"
+
+    def test_program_roundtrip_password(self):
+        prog = G1mProgram(b"MYPROG", 10 + 4, b"CODE", b"PASS")
+        g = self._write_and_read_back([prog])
+        assert g.items[0].g1m_password == b"PASS"
+
+    def test_program_roundtrip_empty_password(self):
+        prog = G1mProgram(b"NOPW", 10 + 3, b"DAT", b"")
+        g = self._write_and_read_back([prog])
+        assert g.items[0].g1m_password == b""
+
+    def test_multiple_programs(self):
+        progs = [
+            G1mProgram(b"PROG1", 10 + 4, b"AAAA", b""),
+            G1mProgram(b"PROG2", 10 + 4, b"BBBB", b""),
+        ]
+        g = self._write_and_read_back(progs)
+        assert len(g.items) == 2
+        assert g.items[0].g1m_title == b"PROG1"
+        assert g.items[1].g1m_title == b"PROG2"
+
+    def test_picture_roundtrip(self):
+        raw = b"\xAB" * 4096
+        pic = G1mPicture(b"PIC1", len(raw), raw)
+        g = self._write_and_read_back([pic])
+        assert isinstance(g.items[0], G1mPicture)
+        assert g.items[0].g1m_title == b"PIC1"
+        assert g.items[0].g1m_picture == raw
+
+    def test_empty_items_writes_valid_file(self):
+        g = self._write_and_read_back([])
+        assert g.items == []

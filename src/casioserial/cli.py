@@ -3,18 +3,18 @@ import sys
 import argparse
 
 from . import (
-    CasioSerialDevice,
-    SerialCommunicationException,
     DEFAULT_CASIO_SERIAL_DEVICE,
     DEFAULT_CASIO_SERIAL_BAUDRATE,
     DEFAULT_CASIO_SERIAL_STOPBITS,
+    CasioSerialDevice,
+    SerialCommunicationException,
+    Program,
+    Picture
 )
-from . import g1mfile
+from .g1mfile import G1mProgram, G1mPicture, G1mFile
 
 
 def casio_serial_transmit(args):
-    print(args)
-
     # check the file exists
     if not os.path.isfile(args.file):
         print(f'Source file {args.file} does not exist or is not a file')
@@ -42,7 +42,7 @@ def casio_serial_transmit(args):
         print(f"Serial communication is established")
 
         # open the g1m file
-        with g1mfile.G1mFile(args.file, 'r',
+        with G1mFile(args.file, 'r',
                              debug=(1 if args.verbose else 0)) as g:
             for item in g.itemlist():
                 # check if this item should be transmitted
@@ -51,18 +51,18 @@ def casio_serial_transmit(args):
                     continue
 
                 # check that the type is transmittable
-                if not type(item) in (g1mfile.G1mProgram, g1mfile.G1mPicture):
+                if not type(item) in (G1mProgram, G1mPicture):
                     print(f'Skipping transmission of {item}: not supported')
                     continue
 
-                if type(item) is g1mfile.G1mProgram:
+                if type(item) is G1mProgram:
                     print(f'Transmitting program {item}')
                     casio_device.transmit_program(name=item.g1m_title,
                                                   program=item.g1m_program,
                                                   password=item.g1m_password,
                                                   overwrite=args.force)
 
-                elif type(item) is g1mfile.G1mPicture:
+                elif type(item) is G1mPicture:
                     print(f'Transmitting picture {item}')
 
                 transmitted_item_names.append(item.title)
@@ -76,8 +76,60 @@ def casio_serial_transmit(args):
 
 
 def casio_serial_receive(args):
-    raise NotImplementedError()
-    # print('receiving!')
+    if not args.force and os.path.exists(args.file):
+        print(f'Target file {args.file} already exists. Use -f to overwrite.')
+        return 1
+
+    received_items = []
+
+    with CasioSerialDevice(mode='receive',
+                           device=args.device,
+                           baudrate=args.baudrate,
+                           stopbits=args.stopbits) as casio_device:
+        print(f'Waiting for device to initiate transfer on {casio_device}...')
+
+        try:
+            casio_device.start_communication()
+        except SerialCommunicationException as e:
+            print(
+                f'A communication exception occurred. '
+                f'Make sure the device is connected and in send mode.'
+            )
+            return 1
+
+        print('Connection established. Receiving items...')
+
+        while True:
+            item = casio_device.receive_item()
+            if item is None:
+                break
+            print(f'Received: {item}')
+            received_items.append(item)
+        
+        print('Transfer complete.')
+
+    if not received_items:
+        print('No items received.')
+        return 0
+
+    with G1mFile(args.file, 'w') as g:
+        for item in received_items:
+            if isinstance(item, Program):
+                g.items.append(G1mProgram(
+                    g1m_title=item.name,
+                    length=10 + len(item.data),
+                    g1m_program=item.data,
+                    g1m_password=item.password,
+                ))
+            elif isinstance(item, Picture):
+                g.items.append(G1mPicture(
+                    g1m_title=item.name,
+                    length=len(item.data),
+                    g1m_picture=item.data,
+                ))
+
+    print(f'Written {len(received_items)} item(s) to {args.file}')
+    return 0
 
 
 def load_arguments():
