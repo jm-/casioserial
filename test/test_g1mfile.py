@@ -84,7 +84,8 @@ class TestTranslation:
 
     def test_roundtrip(self):
         original = b"\x89\x99\xab"
-        assert translate_ascii_bytes_to_g1m(translate_g1m_bytes_to_ascii(original)) == original
+        assert translate_ascii_bytes_to_g1m(
+            translate_g1m_bytes_to_ascii(original)) == original
 
     def test_passthrough(self):
         data = b"HELLO\x00\xff"

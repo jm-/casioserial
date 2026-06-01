@@ -143,7 +143,8 @@ class TestVerifyChecksum:
         assert verify_checksum(gen_program_body_packet(b"HELLO"))
 
     def test_header_packet_passes(self):
-        assert verify_checksum(gen_program_header_packet(b"ROULETTE", 389, b""))
+        assert verify_checksum(
+            gen_program_header_packet(b"ROULETTE", 389, b""))
 
     def test_corrupted_checksum_fails(self):
         pkt = bytearray(gen_end_packet())

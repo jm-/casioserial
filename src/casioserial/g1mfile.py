@@ -171,7 +171,6 @@ class G1mFile():
 
         return num_items
 
-
     def _write_header(self, num_items):
         # writes the g1m header to the first 32 bytes.
         # assumes the current stream position is at the end of the file
@@ -204,7 +203,6 @@ class G1mFile():
 
         self.fp.write(header_bytes)
 
-
     def _read_program(self, item_title, item_length, item_data):
         program = G1mProgram(
             item_title.rstrip(b'\x00'),
@@ -213,7 +211,6 @@ class G1mFile():
             item_data[:8].rstrip(b'\x00')
         )
         return program
-
 
     def _write_program(self, item):
         # write header 1
@@ -263,7 +260,6 @@ class G1mFile():
         # seek back
         self.fp.seek(post_program_stream_position, 0)
 
-
     def _read_picture(self, item_title, item_length, item_data):
         picture = G1mPicture(
             item_title.rstrip(b'\x00'),
@@ -271,7 +267,6 @@ class G1mFile():
             item_data
         )
         return picture
-
 
     def _write_pict(self, item):
         # write header 1
@@ -294,7 +289,6 @@ class G1mFile():
 
         # write pixel data
         self.fp.write(item.g1m_picture)
-
 
     def _read_item(self):
         item_header_2 = self.fp.read(24)
@@ -324,7 +318,7 @@ class G1mFile():
         else:
             print(f'Unknown G1M Item Type: {item_type_identifier}')
             return None
-            #raise UnknownG1mItemTypeException(f"{item_type_identifier}")
+            # raise UnknownG1mItemTypeException(f"{item_type_identifier}")
 
     def _read_items(self):
         item_header_1 = self.fp.read(20)
@@ -346,7 +340,6 @@ class G1mFile():
         while len(self.items) < num_items:
             self.items.extend(self._read_items())
 
-
     def _write_items(self, items):
         # skip the header til last; we need to write the filesize
         self.fp.write(b'\x00' * 32)
@@ -364,7 +357,6 @@ class G1mFile():
                 pass
         # g1m header can be written
         self._write_header(items_written)
-
 
     def itemlist(self):
         return self.items

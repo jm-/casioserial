@@ -129,6 +129,7 @@ def parse_program_body(packet, payload_length):
         raise ValueError("Checksum mismatch")
     return packet[1:-2]  # strip ':' and trailing \xff + checksum
 
+
 def parse_picture_chunk(packet, payload_length):
     """Extract picture bytes from a received chunk packet"""
     if len(packet) != payload_length or packet[0:1] != PROTOCOL_PACKET_DELIMITER:

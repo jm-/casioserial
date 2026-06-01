@@ -43,7 +43,7 @@ def casio_serial_transmit(args):
 
         # open the g1m file
         with G1mFile(args.file, 'r',
-                             debug=(1 if args.verbose else 0)) as g:
+                     debug=(1 if args.verbose else 0)) as g:
             for item in g.itemlist():
                 # check if this item should be transmitted
                 if args.itemnames and item.title not in args.itemnames:
@@ -105,7 +105,7 @@ def casio_serial_receive(args):
                 break
             print(f'Received: {item}')
             received_items.append(item)
-        
+
         print('Transfer complete.')
 
     if not received_items:

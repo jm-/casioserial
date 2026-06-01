@@ -164,7 +164,8 @@ class CasioSerialDevice():
             picture_data = b''
             for _ in range(NUM_IMG_CHUNKS):
                 chunk_packet = self._receive_packet(payload_length)
-                picture_chunk = parse_picture_chunk(chunk_packet, payload_length)
+                picture_chunk = parse_picture_chunk(
+                    chunk_packet, payload_length)
                 picture_data += picture_chunk
                 self._transmit_packet(PROTOCOL_OPERATION_ACK)
             return Picture(name=img_name, data=picture_data, height=height, width=width)

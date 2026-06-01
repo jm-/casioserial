@@ -48,7 +48,8 @@ class TestStartCommunication:
         dev = CasioSerialDevice("transmit")
         with pytest.raises(SerialCommunicationException):
             dev.start_communication()
-        written = [c.args[0] for c in mock_serial.return_value.write.call_args_list]
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
         assert b"\x22" in written
 
 
@@ -56,7 +57,8 @@ class TestEndCommunication:
     def test_sends_end_packet(self, mock_serial):
         dev = CasioSerialDevice("transmit")
         dev.end_communication()
-        mock_serial.return_value.write.assert_called_once_with(gen_end_packet())
+        mock_serial.return_value.write.assert_called_once_with(
+            gen_end_packet())
 
 
 class TestTransmitProgram:
@@ -64,7 +66,8 @@ class TestTransmitProgram:
         mock_serial.return_value.read.side_effect = [b"\x06", b"\x06"]
         dev = CasioSerialDevice("transmit")
         dev.transmit_program(b"TEST", b"PROG", password=b"")
-        written = [c.args[0] for c in mock_serial.return_value.write.call_args_list]
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
         assert written[1] == gen_program_body_packet(b"PROG")
 
@@ -73,7 +76,8 @@ class TestTransmitProgram:
         mock_serial.return_value.read.side_effect = [b"\x21", b"\x06", b"\x06"]
         dev = CasioSerialDevice("transmit")
         dev.transmit_program(b"TEST", b"PROG", password=b"", overwrite=True)
-        written = [c.args[0] for c in mock_serial.return_value.write.call_args_list]
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
         assert written[1] == b"\x06"  # overwrite-yes
         assert written[2] == gen_program_body_packet(b"PROG")
@@ -83,7 +87,8 @@ class TestTransmitProgram:
         mock_serial.return_value.read.side_effect = [b"\x21", b"\x06"]
         dev = CasioSerialDevice("transmit")
         dev.transmit_program(b"TEST", b"PROG", password=b"", overwrite=False)
-        written = [c.args[0] for c in mock_serial.return_value.write.call_args_list]
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
         assert written[1] == b"\x15"  # overwrite-no
         # body packet must NOT be sent
@@ -94,5 +99,6 @@ class TestTransmitProgram:
         dev = CasioSerialDevice("transmit")
         with pytest.raises(SerialCommunicationException):
             dev.transmit_program(b"TEST", b"PROG", password=b"")
-        written = [c.args[0] for c in mock_serial.return_value.write.call_args_list]
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
         assert b"\x22" in written
