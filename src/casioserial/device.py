@@ -48,8 +48,7 @@ class CasioSerialDevice():
     def _transmit_packet(self, packet_data):
         self.ser.write(packet_data)
 
-    def _receive_packet(self, length, timeout=None):
-        # don't use a timeout - appears to affect transmit logic
+    def _receive_packet(self, length):
         return self.ser.read(length)
 
     def start_communication(self):
@@ -58,7 +57,7 @@ class CasioSerialDevice():
             self._transmit_packet(gen_start_packet())
 
             # the device should reply in a timely fashion
-            recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
+            recv_packet_data = self._receive_packet(1)
 
             # check that the device replied
             if not recv_packet_data:
@@ -74,7 +73,7 @@ class CasioSerialDevice():
 
         elif self.mode == 'receive':
             # wait for the device to initiate
-            recv_packet_data = self._receive_packet(1, timeout=CONNECT_TIMEOUT)
+            recv_packet_data = self._receive_packet(1)
 
             if not recv_packet_data:
                 raise SerialCommunicationException(

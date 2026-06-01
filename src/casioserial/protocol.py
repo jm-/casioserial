@@ -1,7 +1,6 @@
 import struct
 
 
-CONNECT_TIMEOUT = 0.5
 PROTOCOL_HEADER_LENGTH = 50
 
 # protocol packet sequences
