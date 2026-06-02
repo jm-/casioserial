@@ -14,6 +14,13 @@ from . import (
 from .g1mfile import G1mProgram, G1mPicture, G1mFile
 
 
+def g1m_picture_title(wire_name):
+    """Map a wire picture name to its G1M title, e.g. b'Picture5' -> b'PICT5'."""
+    if wire_name.startswith(b'Picture'):
+        return b'PICT' + wire_name[len(b'Picture'):]
+    return wire_name
+
+
 def casio_serial_transmit(args):
     # check the file exists
     if not os.path.isfile(args.file):
@@ -125,7 +132,7 @@ def casio_serial_receive(args):
                 ))
             elif isinstance(item, Picture):
                 g.items.append(G1mPicture(
-                    g1m_title=item.name,
+                    g1m_title=g1m_picture_title(item.name),
                     length=len(item.data),
                     g1m_picture=item.data,
                 ))
