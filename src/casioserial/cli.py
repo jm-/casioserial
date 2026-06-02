@@ -104,6 +104,8 @@ def casio_serial_receive(args):
             if item is None:
                 break
             print(f'Received: {item}')
+            if args.verbose and isinstance(item, Picture):
+                print(item.to_ascii())
             received_items.append(item)
 
         print('Transfer complete.')

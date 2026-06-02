@@ -14,7 +14,9 @@ from casioserial.protocol import (
     is_end_header,
     is_img_header,
     is_txt_header,
+    decode_picture,
     parse_img_header,
+    parse_picture_chunk,
     parse_program_body,
     parse_txt_header,
     verify_checksum,
@@ -222,7 +224,7 @@ class TestParseProgramBody:
 
 
 class TestParseImgHeader:
-    def _make_img_header(self, name, height, width):
+    def _make_img_header(self, name, height, width, num_chunks=4):
         # Build a minimal IMG header matching the observed wire format (50 bytes total)
         body = struct.pack(
             ">4s1s2sHH8s8s5s4s13s",
@@ -234,7 +236,7 @@ class TestParseImgHeader:
             name.ljust(8, b"\xff"),
             b"\xff" * 8,
             b"DRUWF",
-            b"\x00\x04\x00\x01",
+            struct.pack(">HH", num_chunks, 1),
             b"\xff" * 13,
         )
         from casioserial.protocol import _compute_checksum_byte
@@ -242,10 +244,16 @@ class TestParseImgHeader:
 
     def test_roundtrip(self):
         pkt = self._make_img_header(b"Picture1", 64, 128)
-        img_name, height, width = parse_img_header(pkt)
+        img_name, height, width, num_chunks = parse_img_header(pkt)
         assert img_name == b"Picture1"
         assert height == 64
         assert width == 128
+        assert num_chunks == 4
+
+    def test_num_chunks_extracted(self):
+        pkt = self._make_img_header(b"Test", 64, 128, num_chunks=8)
+        _, _, _, num_chunks = parse_img_header(pkt)
+        assert num_chunks == 8
 
     def test_bad_checksum_raises(self):
         pkt = bytearray(self._make_img_header(b"Picture1", 64, 128))
@@ -256,3 +264,85 @@ class TestParseImgHeader:
     def test_wrong_type_raises(self):
         with pytest.raises(ValueError, match="Not an IMG"):
             parse_img_header(gen_end_packet())
+
+
+class TestParsePictureChunk:
+    def _make_chunk(self, chunk_index, pixel_data):
+        header = struct.pack(">HH", 1, chunk_index)
+        body = b":" + header + pixel_data
+        return body + _compute_checksum_byte(body)
+
+    def test_roundtrip(self):
+        pixels = bytes(range(256)) * 4  # 1024 bytes
+        pkt = self._make_chunk(3, pixels)
+        assert parse_picture_chunk(pkt, len(pkt)) == (3, pixels)
+
+    def test_all_zero_pixels(self):
+        pixels = b"\x00" * 1024
+        pkt = self._make_chunk(1, pixels)
+        assert parse_picture_chunk(pkt, len(pkt)) == (1, pixels)
+
+    def test_bad_checksum_raises(self):
+        pixels = b"\xab" * 1024
+        pkt = bytearray(self._make_chunk(2, pixels))
+        pkt[-1] ^= 0xFF
+        with pytest.raises(ValueError, match="Checksum"):
+            parse_picture_chunk(bytes(pkt), len(pkt))
+
+    def test_wrong_length_raises(self):
+        pixels = b"\x00" * 1024
+        pkt = self._make_chunk(1, pixels)
+        with pytest.raises(ValueError):
+            parse_picture_chunk(pkt, len(pkt) + 1)
+
+    def test_transcript_chunk1_parses(self):
+        # Chunk 1 from recv_picture_1.txt: 1024 zero bytes, checksum 0xfe
+        pixels = b"\x00" * 1024
+        pkt = self._make_chunk(1, pixels)
+        assert pkt[-1] == 0xFE
+        assert parse_picture_chunk(pkt, len(pkt)) == (1, pixels)
+
+
+class TestDecodePicture:
+    WIDTH = 128
+    HEIGHT = 64
+
+    def _blank_plane(self):
+        return bytearray((self.WIDTH // 8) * self.HEIGHT)
+
+    def _set_plane_pixel(self, plane, x, y):
+        # Inverse of the decode mapping: set display pixel (x, y) in a plane.
+        sx = (self.HEIGHT - 1) - y
+        sy = (self.WIDTH - 1) - x
+        plane[(sy // 8) * self.HEIGHT + sx] |= 1 << (sy & 7)
+
+    def _bitmap_pixel(self, bitmap, x, y):
+        row_bytes = self.WIDTH // 8
+        return (bitmap[y * row_bytes + (x >> 3)] >> (7 - (x & 7))) & 1
+
+    def test_output_size_and_zero(self):
+        planes = {i: bytes(1024) for i in (1, 2, 3, 4)}
+        bitmap = decode_picture(planes, self.WIDTH, self.HEIGHT)
+        assert len(bitmap) == (self.WIDTH // 8) * (2 * self.HEIGHT)  # 2048
+        assert bitmap == bytes(len(bitmap))
+
+    def test_plane2_top_plane4_bottom(self):
+        p2 = self._blank_plane()
+        p4 = self._blank_plane()
+        self._set_plane_pixel(p2, 10, 5)   # -> composed (10, 5)
+        self._set_plane_pixel(p4, 20, 7)   # -> composed (20, 64 + 7)
+        planes = {1: bytes(1024), 2: bytes(p2), 3: bytes(1024), 4: bytes(p4)}
+        bitmap = decode_picture(planes, self.WIDTH, self.HEIGHT)
+
+        assert self._bitmap_pixel(bitmap, 10, 5) == 1
+        assert self._bitmap_pixel(bitmap, 20, 64 + 7) == 1
+        # planes 1 and 3 are ignored; only the two pixels above are set
+        assert sum(bin(b).count("1") for b in bitmap) == 2
+
+    def test_missing_planes_are_blank(self):
+        # Only plane 2 present; plane 4 half stays blank.
+        p2 = self._blank_plane()
+        self._set_plane_pixel(p2, 0, 0)
+        bitmap = decode_picture({2: bytes(p2)}, self.WIDTH, self.HEIGHT)
+        assert self._bitmap_pixel(bitmap, 0, 0) == 1
+        assert sum(bin(b).count("1") for b in bitmap) == 1

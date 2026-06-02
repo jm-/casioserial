@@ -154,20 +154,18 @@ class CasioSerialDevice():
             return Program(name=prog_name, data=program_data, password=prog_password)
 
         if is_img_header(header):
-            img_name, height, width = parse_img_header(header)
+            img_name, height, width, num_chunks = parse_img_header(header)
             self._transmit_packet(PROTOCOL_OPERATION_ACK)
-            # chunk count is likely carried in header bytes 31:33 (observed 0x0004);
-            # hardcoded until confirmed by further testing
-            NUM_IMG_CHUNKS = 4
             payload_length = 1 + 4 + (height * width) // 8 + 1
-            picture_data = b''
-            for _ in range(NUM_IMG_CHUNKS):
+            planes = {}
+            for _ in range(num_chunks):
                 chunk_packet = self._receive_packet(payload_length)
-                picture_chunk = parse_picture_chunk(
-                    chunk_packet, payload_length)
-                picture_data += picture_chunk
+                chunk_index, plane = parse_picture_chunk(chunk_packet, payload_length)
+                planes[chunk_index] = plane
                 self._transmit_packet(PROTOCOL_OPERATION_ACK)
-            return Picture(name=img_name, data=picture_data, height=height, width=width)
+            picture_data = decode_picture(planes, width, height)
+            return Picture(name=img_name, data=picture_data,
+                           width=width, height=2 * height)
 
         raise SerialCommunicationException(
             f'Unknown header type: {header[:4]!r}'

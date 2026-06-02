@@ -110,14 +110,15 @@ def parse_txt_header(packet):
 
 
 def parse_img_header(packet):
-    """Parse IMG header. Returns (img_name, height, width)."""
+    """Parse IMG header. Returns (img_name, height, width, num_chunks)."""
     if not is_img_header(packet):
         raise ValueError("Not an IMG header")
     if not verify_checksum(packet):
         raise ValueError("Checksum mismatch")
     height, width = struct.unpack('>HH', packet[7:11])
     img_name = packet[11:19].rstrip(PROTOCOL_PACKET_PADDING)
-    return img_name, height, width
+    num_chunks = struct.unpack('>H', packet[32:34])[0]
+    return img_name, height, width, num_chunks
 
 
 def parse_program_body(packet, payload_length):
@@ -130,9 +131,45 @@ def parse_program_body(packet, payload_length):
 
 
 def parse_picture_chunk(packet, payload_length):
-    """Extract picture bytes from a received chunk packet"""
+    """Extract one picture plane. Returns (chunk_index, plane_bytes)."""
     if len(packet) != payload_length or packet[0:1] != PROTOCOL_PACKET_DELIMITER:
         raise ValueError("Invalid picture chunk packet")
     if not verify_checksum(packet):
         raise ValueError("Checksum mismatch")
-    return chunk[5:-1]  # skip ':' + 4-byte sequence header + checksum
+    chunk_index = struct.unpack('>H', packet[3:5])[0]
+    plane = packet[5:-1]  # skip ':' + 4-byte sequence header + checksum
+    return chunk_index, plane
+
+
+def decode_picture(planes, width, height):
+    """Compose received picture planes into a row-major monochrome bitmap.
+
+    `planes` maps a 1-based plane index to its 1024-byte page-format buffer.
+    Planes 2 and 4 carry the visible bitmap (planes 1 and 3 are reserved); they
+    stack vertically into a `width` x `2 * height` image, plane 2 on top.
+
+    Each plane byte holds 8 vertically stacked pixels (bit 0 = top). The buffer
+    is the display rotated 90 degrees, so a display pixel (x, y) within a plane
+    maps to storage column `sx = (height - 1) - y` and row `sy = (width - 1) - x`,
+    at byte `(sy // 8) * height + sx`, bit `sy & 7`.
+
+    Returns a bitmap of `(width // 8) * 2 * height` bytes, row-major, MSB =
+    leftmost pixel.
+    """
+    out_height = 2 * height
+    row_bytes = width // 8
+    bitmap = bytearray(row_bytes * out_height)
+
+    for plane_index, y_offset in ((2, 0), (4, height)):
+        plane = planes.get(plane_index)
+        if plane is None:
+            continue
+        for y in range(height):
+            row_base = (y_offset + y) * row_bytes
+            for x in range(width):
+                sx = (height - 1) - y
+                sy = (width - 1) - x
+                if (plane[(sy // 8) * height + sx] >> (sy & 7)) & 1:
+                    bitmap[row_base + (x >> 3)] |= 0x80 >> (x & 7)
+
+    return bytes(bitmap)
