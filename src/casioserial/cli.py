@@ -60,14 +60,13 @@ def casio_serial_transmit(args):
         with G1mFile(args.file, 'r',
                      debug=(1 if args.verbose else 0)) as g:
             for item in g.itemlist():
-                # check if this item should be transmitted
                 if args.itemnames and item.title not in args.itemnames:
-                    print(f'Skipping transmission of {item}: not specified')
+                    print(f'Skipping {item}: not in requested items')
                     continue
 
                 # check that the type is transmittable
                 if not type(item) in (G1mProgram, G1mPicture):
-                    print(f'Skipping transmission of {item}: not supported')
+                    print(f'Skipping {item}: unsupported item type')
                     continue
 
                 if type(item) is G1mProgram:
