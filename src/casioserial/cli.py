@@ -40,7 +40,8 @@ def casio_serial_transmit(args):
     with CasioSerialDevice(mode='transmit',
                            device=args.device,
                            baudrate=args.baudrate,
-                           stopbits=args.stopbits) as casio_device:
+                           stopbits=args.stopbits,
+                           debug=(1 if args.verbose else 0)) as casio_device:
         # establish connection
         print(f'Establishing serial communication with {casio_device}')
 
@@ -103,7 +104,8 @@ def casio_serial_receive(args):
     with CasioSerialDevice(mode='receive',
                            device=args.device,
                            baudrate=args.baudrate,
-                           stopbits=args.stopbits) as casio_device:
+                           stopbits=args.stopbits,
+                           debug=(1 if args.verbose else 0)) as casio_device:
         print(f'Waiting for device to initiate transfer on {casio_device}...')
 
         try:
@@ -132,7 +134,8 @@ def casio_serial_receive(args):
         print('No items received.')
         return 0
 
-    with G1mFile(args.file, 'w') as g:
+    with G1mFile(args.file, 'w',
+                 debug=(1 if args.verbose else 0)) as g:
         for item in received_items:
             if isinstance(item, Program):
                 g.items.append(G1mProgram(

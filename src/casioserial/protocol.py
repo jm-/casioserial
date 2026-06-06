@@ -12,6 +12,10 @@ PROTOCOL_HEADER_END = PROTOCOL_PACKET_DELIMITER + b'END'
 PROTOCOL_HEADER_TXT = PROTOCOL_PACKET_DELIMITER + b'TXT'
 PROTOCOL_HEADER_IMG = PROTOCOL_PACKET_DELIMITER + b'IMG'
 
+# program (:TXT) format constants
+PROTOCOL_PROGRAM_PAYLOAD_TYPE = b'PG'
+PROTOCOL_PROGRAM_MARKER = b'NL'
+
 # picture (:IMG) format constants
 PROTOCOL_PICTURE_PAYLOAD_TYPE = b'PC'
 PROTOCOL_PICTURE_MARKER = b'DRUWF'
@@ -71,13 +75,13 @@ def gen_program_header_packet(name, program_length, password):
         '>4s1s2s2sH8s8s8s2s12s',
         PROTOCOL_HEADER_TXT,
         b'\x00',
-        b'PG',
+        PROTOCOL_PROGRAM_PAYLOAD_TYPE,
         b'\x00\x00',
         program_length + 3,
         name.ljust(8, PROTOCOL_PACKET_PADDING),
         PROTOCOL_PACKET_PADDING * 8,
         password.ljust(8, PROTOCOL_PACKET_PADDING),
-        b'NL',
+        PROTOCOL_PROGRAM_MARKER,
         PROTOCOL_PACKET_PADDING * 12
     )
     packet_data = packet_body + _compute_checksum_byte(packet_body)

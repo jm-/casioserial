@@ -19,15 +19,18 @@ class CasioSerialDevice():
     def __init__(self, mode,
                  device=DEFAULT_CASIO_SERIAL_DEVICE,
                  baudrate=DEFAULT_CASIO_SERIAL_BAUDRATE,
-                 stopbits=DEFAULT_CASIO_SERIAL_STOPBITS):
+                 stopbits=DEFAULT_CASIO_SERIAL_STOPBITS,
+                 debug=0):
 
         if mode not in ('transmit', 'receive'):
             raise ValueError("Mode must be either 'transmit' or 'receive'")
 
         self.mode = mode
         self.device = device
+        self.debug = debug
 
         # create a serial connection
+        self._log(f'opening serial device {device}')
         self.ser = serial.Serial(
             device,
             baudrate=baudrate,
@@ -45,11 +48,20 @@ class CasioSerialDevice():
     def __repr__(self):
         return f'Casio serial device ({self.device})'
 
+    def _log(self, message):
+        if self.debug:
+            print(f'DBG: {message}')
+
     def _transmit_packet(self, packet_data):
+        if self.debug:
+            print(f' <  0x{packet_data.hex()}')
         self.ser.write(packet_data)
 
     def _receive_packet(self, length):
-        return self.ser.read(length)
+        packet_data = self.ser.read(length)
+        if self.debug:
+            print(f'  > 0x{packet_data.hex()}')
+        return packet_data
 
     def start_communication(self):
         if self.mode == 'transmit':
@@ -104,11 +116,11 @@ class CasioSerialDevice():
         # check if the device indicated the program already exists
         if recv_packet_data == PROTOCOL_ITEM_EXISTS:
             if overwrite:
-                print(f'DBG: Overwriting existing item')
+                self._log('Overwriting existing item')
                 self._transmit_packet(gen_overwrite_yes_packet())
 
             else:
-                print(f'DBG: Not overwriting existing item')
+                self._log('Not overwriting existing item')
                 self._transmit_packet(gen_overwrite_no_packet())
                 should_transmit_body = False
 
@@ -152,11 +164,11 @@ class CasioSerialDevice():
         # check if the device indicated the picture already exists
         if recv_packet_data == PROTOCOL_ITEM_EXISTS:
             if overwrite:
-                print(f'DBG: Overwriting existing item')
+                self._log('Overwriting existing item')
                 self._transmit_packet(gen_overwrite_yes_packet())
 
             else:
-                print(f'DBG: Not overwriting existing item')
+                self._log('Not overwriting existing item')
                 self._transmit_packet(gen_overwrite_no_packet())
                 should_transmit_body = False
 
@@ -174,6 +186,7 @@ class CasioSerialDevice():
 
         # transmit each plane as a chunk packet, in order, ack after each
         for chunk_index in sorted(planes):
+            self._log(f'transmitting chunk {chunk_index}/{len(planes)}')
             self._transmit_packet(
                 gen_picture_chunk_packet(chunk_index, planes[chunk_index])
             )
@@ -187,17 +200,25 @@ class CasioSerialDevice():
 
     def receive_item(self):
         """Read one item from the device. Returns Program, Picture, or None (END)."""
+        self._log(f'expecting to read header ({PROTOCOL_HEADER_LENGTH} bytes)')
         header = self._receive_packet(PROTOCOL_HEADER_LENGTH)
         if len(header) != PROTOCOL_HEADER_LENGTH:
             raise SerialCommunicationException(
                 f'Did not receive a full header packet'
             )
 
+        self._log(f'header_type={header[1:4]}')
+
         if is_end_header(header):
+            self._log('recv complete, exiting')
             return None
 
         if is_txt_header(header):
             prog_name, payload_length, prog_password = parse_txt_header(header)
+            self._log(f'payload_type={header[5:7]}')
+            self._log(f'payload_length={payload_length}')
+            self._log(f'prog_name={prog_name} prog_length={payload_length - 3} '
+                      f'prog_password={prog_password}')
             self._transmit_packet(PROTOCOL_OPERATION_ACK)
             program_packet = self._receive_packet(payload_length)
             program_data = parse_program_body(program_packet, payload_length)
@@ -206,12 +227,16 @@ class CasioSerialDevice():
 
         if is_img_header(header):
             img_name, height, width, num_chunks = parse_img_header(header)
+            self._log(f'payload_type={header[5:7]}')
+            self._log(f'img_height={height} img_width={width}')
+            self._log(f'img_name={img_name}')
             self._transmit_packet(PROTOCOL_OPERATION_ACK)
             payload_length = 1 + 4 + (height * width) // 8 + 1
             planes = {}
             for _ in range(num_chunks):
                 chunk_packet = self._receive_packet(payload_length)
                 chunk_index, plane = parse_picture_chunk(chunk_packet, payload_length)
+                self._log(f'received chunk {chunk_index}/{num_chunks}')
                 planes[chunk_index] = plane
                 self._transmit_packet(PROTOCOL_OPERATION_ACK)
             picture_data = decode_picture(planes, width, height)
@@ -224,4 +249,5 @@ class CasioSerialDevice():
 
     def close(self):
         if self.ser.is_open:
+            self._log(f'closing serial device {self.device}')
             self.ser.close()
