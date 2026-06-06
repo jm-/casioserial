@@ -103,10 +103,11 @@ class CasioSerialDevice():
         # transmit the end packet to indicate we won't send any more data
         self._transmit_packet(gen_end_packet())
 
-    def transmit_program(self, name, program, password=None, overwrite=False):
+    def transmit_program(self, program, overwrite=False):
         # transmit the program header packet
         self._transmit_packet(
-            gen_program_header_packet(name, len(program), password)
+            gen_program_header_packet(program.name, len(program.data),
+                                      program.password)
         )
 
         # read the reply
@@ -135,7 +136,7 @@ class CasioSerialDevice():
                 )
 
             # transmit the program body packet
-            self._transmit_packet(gen_program_body_packet(program))
+            self._transmit_packet(gen_program_body_packet(program.data))
 
             # read the reply
             recv_packet_data = self._receive_packet(1)
@@ -146,15 +147,16 @@ class CasioSerialDevice():
                 f'Unexpected response from device'
             )
 
-    def transmit_picture(self, name, picture, width=128, height=64,
-                         overwrite=False):
-        # split the bitmap into wire planes (G1M stores no dimensions, so the
-        # 128x128 / per-plane 128x64 model is assumed)
-        planes = encode_picture(picture, width, height)
+    def transmit_picture(self, picture, overwrite=False):
+        # the bitmap stacks two planes vertically; split it back into the
+        # per-plane (height / 2) page-format buffers the wire expects
+        plane_height = picture.height // 2
+        planes = encode_picture(picture.data, picture.width, plane_height)
 
         # transmit the picture header packet
         self._transmit_packet(
-            gen_picture_header_packet(name, height, width, len(planes))
+            gen_picture_header_packet(picture.name, plane_height,
+                                      picture.width, len(planes))
         )
 
         # read the reply

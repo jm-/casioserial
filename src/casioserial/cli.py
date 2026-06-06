@@ -72,16 +72,18 @@ def casio_serial_transmit(args):
 
                 if type(item) is G1mProgram:
                     print(f'Transmitting program {item}')
-                    casio_device.transmit_program(name=item.g1m_title,
-                                                  program=item.g1m_program,
-                                                  password=item.g1m_password,
-                                                  overwrite=args.force)
+                    casio_device.transmit_program(
+                        Program(name=item.g1m_title,
+                                data=item.g1m_program,
+                                password=item.g1m_password),
+                        overwrite=args.force)
 
                 elif type(item) is G1mPicture:
                     print(f'Transmitting picture {item}')
                     casio_device.transmit_picture(
-                        name=wire_picture_title(item.g1m_title),
-                        picture=item.g1m_picture,
+                        Picture(name=wire_picture_title(item.g1m_title),
+                                data=item.g1m_picture,
+                                width=128, height=128),
                         overwrite=args.force)
 
                 transmitted_item_names.append(item.title)

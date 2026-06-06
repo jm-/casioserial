@@ -2,8 +2,12 @@ import pytest
 from unittest.mock import call, patch
 
 from casioserial.device import CasioSerialDevice, SerialCommunicationException
+from casioserial.models import Program, Picture
 from casioserial.protocol import (
+    encode_picture,
     gen_end_packet,
+    gen_picture_chunk_packet,
+    gen_picture_header_packet,
     gen_program_body_packet,
     gen_program_header_packet,
 )
@@ -65,7 +69,7 @@ class TestTransmitProgram:
     def test_normal_flow(self, mock_serial):
         mock_serial.return_value.read.side_effect = [b"\x06", b"\x06"]
         dev = CasioSerialDevice("transmit")
-        dev.transmit_program(b"TEST", b"PROG", password=b"")
+        dev.transmit_program(Program(name=b"TEST", data=b"PROG", password=b""))
         written = [c.args[0]
                    for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
@@ -75,7 +79,8 @@ class TestTransmitProgram:
         # calc replies: item exists, then ack after overwrite-yes, then ack after body
         mock_serial.return_value.read.side_effect = [b"\x21", b"\x06", b"\x06"]
         dev = CasioSerialDevice("transmit")
-        dev.transmit_program(b"TEST", b"PROG", password=b"", overwrite=True)
+        dev.transmit_program(
+            Program(name=b"TEST", data=b"PROG", password=b""), overwrite=True)
         written = [c.args[0]
                    for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
@@ -86,7 +91,8 @@ class TestTransmitProgram:
         # calc replies: item exists, then ack after overwrite-no
         mock_serial.return_value.read.side_effect = [b"\x21", b"\x06"]
         dev = CasioSerialDevice("transmit")
-        dev.transmit_program(b"TEST", b"PROG", password=b"", overwrite=False)
+        dev.transmit_program(
+            Program(name=b"TEST", data=b"PROG", password=b""), overwrite=False)
         written = [c.args[0]
                    for c in mock_serial.return_value.write.call_args_list]
         assert written[0] == gen_program_header_packet(b"TEST", 4, b"")
@@ -98,7 +104,35 @@ class TestTransmitProgram:
         mock_serial.return_value.read.return_value = b"\xaa"
         dev = CasioSerialDevice("transmit")
         with pytest.raises(SerialCommunicationException):
-            dev.transmit_program(b"TEST", b"PROG", password=b"")
+            dev.transmit_program(Program(name=b"TEST", data=b"PROG", password=b""))
         written = [c.args[0]
                    for c in mock_serial.return_value.write.call_args_list]
         assert b"\x22" in written
+
+
+class TestTransmitPicture:
+    def test_normal_flow(self, mock_serial):
+        # ack the header, then ack each of the 4 chunks
+        mock_serial.return_value.read.side_effect = [b"\x06"] * 5
+        dev = CasioSerialDevice("transmit")
+        bitmap = bytes(2048)  # blank 128x128
+        dev.transmit_picture(
+            Picture(name=b"Picture1", data=bitmap, width=128, height=128))
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
+        planes = encode_picture(bitmap, 128, 64)
+        assert written[0] == gen_picture_header_packet(b"Picture1", 64, 128, 4)
+        assert written[1:] == [gen_picture_chunk_packet(i, planes[i])
+                               for i in (1, 2, 3, 4)]
+
+    def test_item_exists_overwrite_false_stops_after_header(self, mock_serial):
+        mock_serial.return_value.read.side_effect = [b"\x21", b"\x06"]
+        dev = CasioSerialDevice("transmit")
+        dev.transmit_picture(
+            Picture(name=b"Picture1", data=bytes(2048), width=128, height=128),
+            overwrite=False)
+        written = [c.args[0]
+                   for c in mock_serial.return_value.write.call_args_list]
+        assert written[0] == gen_picture_header_packet(b"Picture1", 64, 128, 4)
+        assert written[1] == b"\x15"  # overwrite-no
+        assert len(written) == 2  # no chunks sent
