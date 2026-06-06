@@ -21,6 +21,13 @@ def g1m_picture_title(wire_name):
     return wire_name
 
 
+def wire_picture_title(g1m_title):
+    """Map a G1M picture name to its wire title, e.g. b'PICT5' -> b'Picture5'."""
+    if g1m_title.startswith(b'PICT'):
+        return b'Picture' + g1m_title[len(b'PICT'):]
+    return g1m_title
+
+
 def casio_serial_transmit(args):
     # check the file exists
     if not os.path.isfile(args.file):
@@ -71,6 +78,10 @@ def casio_serial_transmit(args):
 
                 elif type(item) is G1mPicture:
                     print(f'Transmitting picture {item}')
+                    casio_device.transmit_picture(
+                        name=wire_picture_title(item.g1m_title),
+                        picture=item.g1m_picture,
+                        overwrite=args.force)
 
                 transmitted_item_names.append(item.title)
 

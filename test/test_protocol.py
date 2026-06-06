@@ -15,6 +15,9 @@ from casioserial.protocol import (
     is_img_header,
     is_txt_header,
     decode_picture,
+    encode_picture,
+    gen_picture_chunk_packet,
+    gen_picture_header_packet,
     parse_img_header,
     parse_picture_chunk,
     parse_program_body,
@@ -346,3 +349,49 @@ class TestDecodePicture:
         bitmap = decode_picture({2: bytes(p2)}, self.WIDTH, self.HEIGHT)
         assert self._bitmap_pixel(bitmap, 0, 0) == 1
         assert sum(bin(b).count("1") for b in bitmap) == 1
+
+
+class TestGenPictureHeaderPacket:
+    def test_roundtrips_through_parse(self):
+        pkt = gen_picture_header_packet(b"Picture5", 64, 128, 4)
+        assert len(pkt) == 50
+        assert verify_checksum(pkt)
+        img_name, height, width, num_chunks = parse_img_header(pkt)
+        assert img_name == b"Picture5"
+        assert (height, width, num_chunks) == (64, 128, 4)
+
+    def test_short_name_is_padded(self):
+        pkt = gen_picture_header_packet(b"Pic", 64, 128, 4)
+        img_name, _, _, _ = parse_img_header(pkt)
+        assert img_name == b"Pic"  # parse_img_header strips \xff padding
+
+
+class TestGenPictureChunkPacket:
+    def test_roundtrips_through_parse(self):
+        plane = bytes(range(256)) * 4  # 1024 bytes
+        pkt = gen_picture_chunk_packet(3, plane)
+        assert len(pkt) == 1030
+        assert parse_picture_chunk(pkt, len(pkt)) == (3, plane)
+
+    def test_tag_is_overridable(self):
+        plane = b"\x00" * 1024
+        pkt = gen_picture_chunk_packet(2, plane, tag=7)
+        assert struct.unpack(">H", pkt[1:3])[0] == 7
+
+
+class TestEncodePicture:
+    WIDTH = 128
+    HEIGHT = 64
+
+    def test_inverse_of_decode(self):
+        # a deterministic, busy bitmap covering both halves
+        rng = bytes((i * 37 + 11) & 0xFF for i in range(2048))
+        planes = encode_picture(rng, self.WIDTH, self.HEIGHT)
+        assert decode_picture(planes, self.WIDTH, self.HEIGHT) == rng
+
+    def test_plane_sizes_and_reserved_blank(self):
+        planes = encode_picture(b"\xff" * 2048, self.WIDTH, self.HEIGHT)
+        assert set(planes) == {1, 2, 3, 4}
+        assert all(len(p) == 1024 for p in planes.values())
+        assert planes[1] == b"\x00" * 1024
+        assert planes[3] == b"\x00" * 1024

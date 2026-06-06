@@ -12,6 +12,13 @@ PROTOCOL_HEADER_END = PROTOCOL_PACKET_DELIMITER + b'END'
 PROTOCOL_HEADER_TXT = PROTOCOL_PACKET_DELIMITER + b'TXT'
 PROTOCOL_HEADER_IMG = PROTOCOL_PACKET_DELIMITER + b'IMG'
 
+# picture (:IMG) format constants
+PROTOCOL_PICTURE_PAYLOAD_TYPE = b'PC'
+PROTOCOL_PICTURE_MARKER = b'DRUWF'
+# Shared by the IMG header's [34:36] field and every chunk's first sub-header field.
+# A fixed tag, not an item counter. Observed to always be 0x0001.
+PROTOCOL_PICTURE_TAG = 1
+
 # protocol control sequences
 PROTOCOL_START_BYTE = b'\x16'
 PROTOCOL_START_ACK_BYTE = b'\x13'
@@ -81,6 +88,60 @@ def gen_program_body_packet(program):
     packet_body = PROTOCOL_PACKET_DELIMITER + program + PROTOCOL_PACKET_PADDING
     packet_data = packet_body + _compute_checksum_byte(packet_body)
     return packet_data
+
+
+def gen_picture_header_packet(name, height, width, num_chunks,
+                              tag=PROTOCOL_PICTURE_TAG):
+    packet_body = struct.pack(
+        '>4s1s2sHH8s8s5sHH13s',
+        PROTOCOL_HEADER_IMG,
+        b'\x00',
+        PROTOCOL_PICTURE_PAYLOAD_TYPE,
+        height,
+        width,
+        name.ljust(8, PROTOCOL_PACKET_PADDING),
+        PROTOCOL_PACKET_PADDING * 8,
+        PROTOCOL_PICTURE_MARKER,
+        num_chunks,
+        tag,
+        PROTOCOL_PACKET_PADDING * 13
+    )
+    packet_data = packet_body + _compute_checksum_byte(packet_body)
+    return packet_data
+
+
+def gen_picture_chunk_packet(chunk_index, plane, tag=PROTOCOL_PICTURE_TAG):
+    packet_body = (PROTOCOL_PACKET_DELIMITER
+                   + struct.pack('>HH', tag, chunk_index)
+                   + plane)
+    packet_data = packet_body + _compute_checksum_byte(packet_body)
+    return packet_data
+
+
+def encode_picture(bitmap, width, height):
+    """Split a row-major bitmap into page-format planes (inverse of decode).
+
+    Returns a dict of four 1-based plane buffers, each `(width // 8) * height`
+    bytes. Plane 2 carries the top `height` rows of the bitmap, plane 4 the
+    bottom `height` rows; planes 1 and 3 are all-zero (reserved). See
+    `decode_picture` for the page-format + 90-degree mapping, of which this is
+    the exact inverse.
+    """
+    plane_size = (width // 8) * height
+    row_bytes = width // 8
+    planes = {i: bytearray(plane_size) for i in (1, 2, 3, 4)}
+
+    for plane_index, y_offset in ((2, 0), (4, height)):
+        plane = planes[plane_index]
+        for y in range(height):
+            row_base = (y_offset + y) * row_bytes
+            for x in range(width):
+                if (bitmap[row_base + (x >> 3)] >> (7 - (x & 7))) & 1:
+                    sx = (height - 1) - y
+                    sy = (width - 1) - x
+                    plane[(sy // 8) * height + sx] |= 1 << (sy & 7)
+
+    return {i: bytes(p) for i, p in planes.items()}
 
 
 # --- receive-side packet parsers ---

@@ -134,6 +134,57 @@ class CasioSerialDevice():
                 f'Unexpected response from device'
             )
 
+    def transmit_picture(self, name, picture, width=128, height=64,
+                         overwrite=False):
+        # split the bitmap into wire planes (G1M stores no dimensions, so the
+        # 128x128 / per-plane 128x64 model is assumed)
+        planes = encode_picture(picture, width, height)
+
+        # transmit the picture header packet
+        self._transmit_packet(
+            gen_picture_header_packet(name, height, width, len(planes))
+        )
+
+        # read the reply
+        recv_packet_data = self._receive_packet(1)
+        should_transmit_body = True
+
+        # check if the device indicated the picture already exists
+        if recv_packet_data == PROTOCOL_ITEM_EXISTS:
+            if overwrite:
+                print(f'DBG: Overwriting existing item')
+                self._transmit_packet(gen_overwrite_yes_packet())
+
+            else:
+                print(f'DBG: Not overwriting existing item')
+                self._transmit_packet(gen_overwrite_no_packet())
+                should_transmit_body = False
+
+            # read the reply
+            recv_packet_data = self._receive_packet(1)
+
+        if not should_transmit_body:
+            return
+
+        if recv_packet_data != PROTOCOL_OPERATION_ACK:
+            self._transmit_packet(gen_error_packet())
+            raise SerialCommunicationException(
+                f'Unexpected response from device'
+            )
+
+        # transmit each plane as a chunk packet, in order, ack after each
+        for chunk_index in sorted(planes):
+            self._transmit_packet(
+                gen_picture_chunk_packet(chunk_index, planes[chunk_index])
+            )
+
+            recv_packet_data = self._receive_packet(1)
+            if recv_packet_data != PROTOCOL_OPERATION_ACK:
+                self._transmit_packet(gen_error_packet())
+                raise SerialCommunicationException(
+                    f'Unexpected response from device'
+                )
+
     def receive_item(self):
         """Read one item from the device. Returns Program, Picture, or None (END)."""
         header = self._receive_packet(PROTOCOL_HEADER_LENGTH)
