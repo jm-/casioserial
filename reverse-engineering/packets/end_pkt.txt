@@ -1,6 +1,6 @@
 bytes                                       explanation
 ------------------------------------------------------------------------
-3a 45 4e 44                         		:END
+3a 45 4e 44                                 :END
 ff
 ff
 ff
@@ -46,4 +46,4 @@ ff
 ff
 ff
 ff
-56                                        	(checksum)
+56                                            (checksum)

@@ -1,0 +1,25 @@
+bytes                                       explanation
+------------------------------------------------------------------------
+3a 49 4d 47                                 :IMG
+00
+50 43                                       PC [picture?]
+00 40                                       64 (height)
+00 80                                       128 (width)
+50 69 63 74 75 72 65 31                     Picture1
+ff ff ff ff ff ff ff ff
+44 52 55 57 46                              DRUWF
+00 04 00 01
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+ff
+4b                                          (checksum)
